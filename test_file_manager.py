@@ -301,9 +301,10 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection("/dest")
+        result, errors = self.manager.copy_selection("/dest")
         
         self.assertEqual(result, "/dest")
+        self.assertEqual(errors, [])
         self.assertIn(("/source/file1.txt", "/dest/file1.txt"), self.mock_ops.copied_files)
     
     def test_copy_directory_to_destination(self):
@@ -313,9 +314,10 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("dir1")
         
-        result = self.manager.copy_selection("/dest")
+        result, errors = self.manager.copy_selection("/dest")
         
         self.assertEqual(result, "/dest")
+        self.assertEqual(errors, [])
         self.assertIn(("/source/dir1", "/dest/dir1"), self.mock_ops.copied_directories)
     
     def test_copy_multiple_items(self):
@@ -327,7 +329,7 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.select("file1.txt")
         self.manager.select("dir1")
         
-        self.manager.copy_selection("/dest")
+        dest, errors = self.manager.copy_selection("/dest")
         
         self.assertEqual(len(self.mock_ops.copied_files), 1)
         self.assertEqual(len(self.mock_ops.copied_directories), 1)
@@ -339,7 +341,7 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.copy_selection("/new_dest")
+        dest, errors = self.manager.copy_selection("/new_dest")
         
         self.assertIn("/new_dest", self.mock_fs.created_directories)
     
@@ -351,7 +353,7 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.copy_selection("/dest")
+        dest, errors = self.manager.copy_selection("/dest")
         
         self.assertNotIn("/dest", self.mock_fs.created_directories)
     
@@ -363,27 +365,27 @@ class TestFileManagerCopy(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection()
+        result, errors = self.manager.copy_selection()
         
         self.assertEqual(result, "/source/beau_soleil")
     
     def test_copy_keeps_selection(self):
-        """Test: la copie conserve la sélection."""
+        """Test: la copie sans erreur vide la sélection."""
         self.mock_fs.setup_directory("/source", ["file1.txt"])
         self.mock_fs.add_file("/source/file1.txt")
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.copy_selection("/dest")
+        dest, errors = self.manager.copy_selection("/dest")
         
-        self.assertIn("file1.txt", self.manager.get_selection())
+        self.assertNotIn("file1.txt", self.manager.get_selection())
     
     def test_copy_empty_selection(self):
         """Test: copier une sélection vide."""
         self.mock_fs.setup_directory("/source", ["file1.txt"])
         self.manager.list_entries("/source")
         
-        result = self.manager.copy_selection("/dest")
+        result, errors = self.manager.copy_selection("/dest")
         
         self.assertEqual(result, "/dest")
         self.assertEqual(self.mock_ops.copied_files, [])
@@ -409,9 +411,10 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.move_selection("/dest")
+        result, errors = self.manager.move_selection("/dest")
         
         self.assertEqual(result, "/dest")
+        self.assertEqual(errors, [])
         self.assertIn(("/source/file1.txt", "/dest/file1.txt"), self.mock_ops.moved_items)
     
     def test_move_removes_from_entries(self):
@@ -421,7 +424,7 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.move_selection("/dest")
+        dest, errors = self.manager.move_selection("/dest")
         
         self.assertNotIn("file1.txt", self.manager.get_entries())
         self.assertIn("file2.txt", self.manager.get_entries())
@@ -433,7 +436,7 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.move_selection("/dest")
+        dest, errors = self.manager.move_selection("/dest")
         
         self.assertEqual(self.manager.get_selection(), [])
     
@@ -445,7 +448,7 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.move_selection()
+        result, errors = self.manager.move_selection()
         
         self.assertEqual(result, "/source/grand_montagne")
     
@@ -456,7 +459,7 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        self.manager.move_selection("/new_dest")
+        dest, errors = self.manager.move_selection("/new_dest")
         
         self.assertIn("/new_dest", self.mock_fs.created_directories)
     
@@ -469,7 +472,7 @@ class TestFileManagerMove(unittest.TestCase):
         self.manager.select("file1.txt")
         self.manager.select("file2.txt")
         
-        self.manager.move_selection("/dest")
+        dest, errors = self.manager.move_selection("/dest")
         
         self.assertEqual(len(self.mock_ops.moved_items), 2)
         self.assertEqual(self.manager.get_entries(), [])
@@ -630,7 +633,7 @@ class TestFileManagerRandomRetry(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection()
+        result, errors = self.manager.copy_selection()
         
         self.assertEqual(result, "/source/grand_montagne")
     
@@ -650,7 +653,7 @@ class TestFileManagerRandomRetry(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection()
+        result, errors = self.manager.copy_selection()
         
         self.assertEqual(result, "/source/libre_chemin")
     
@@ -669,7 +672,7 @@ class TestFileManagerRandomRetry(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection()
+        result, errors = self.manager.copy_selection()
         
         # Le dernier nom tiré (nom9_test9) doit être numéroté
         self.assertEqual(result, "/source/nom9_test9_1")
@@ -691,7 +694,7 @@ class TestFileManagerRandomRetry(unittest.TestCase):
         self.manager.list_entries("/source")
         self.manager.select("file1.txt")
         
-        result = self.manager.copy_selection()
+        result, errors = self.manager.copy_selection()
         
         self.assertEqual(result, "/source/nom9_test9_3")
 

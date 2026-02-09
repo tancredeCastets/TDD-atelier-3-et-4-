@@ -206,7 +206,7 @@ class FileManager:
         random_name = self._generate_unique_name()
         return self._filesystem.join_path(self._current_directory, random_name)
     
-    def copy_selection(self, destination: Optional[str] = None) -> str:
+    def copy_selection(self, destination: Optional[str] = None) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Copie les entrées sélectionnées vers la destination.
         
@@ -214,25 +214,36 @@ class FileManager:
             destination: Chemin de destination optionnel
             
         Returns:
-            Chemin de destination utilisé
+            Tuple (chemin de destination utilisé, liste des erreurs)
+            Chaque erreur est un dict avec 'file' et 'error'
         """
         dest_path = self._get_destination_path(destination)
+        errors = []
+        successful = []
         
         if not self._filesystem.exists(dest_path):
             self._filesystem.create_directory(dest_path)
         
-        for entry in self._selection:
+        for entry in list(self._selection):
             source = self._filesystem.join_path(self._current_directory, entry)
             target = self._filesystem.join_path(dest_path, entry)
             
-            if self._filesystem.is_directory(source):
-                self._file_operations.copy_directory(source, target)
-            else:
-                self._file_operations.copy_file(source, target)
+            try:
+                if self._filesystem.is_directory(source):
+                    self._file_operations.copy_directory(source, target)
+                else:
+                    self._file_operations.copy_file(source, target)
+                successful.append(entry)
+            except Exception as e:
+                errors.append({"file": entry, "error": str(e)})
         
-        return dest_path
+        # Retirer les fichiers copiés avec succès de la sélection
+        for entry in successful:
+            self._selection.discard(entry)
+        
+        return dest_path, errors
     
-    def move_selection(self, destination: Optional[str] = None) -> str:
+    def move_selection(self, destination: Optional[str] = None) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Déplace les entrées sélectionnées vers la destination.
         
@@ -240,36 +251,58 @@ class FileManager:
             destination: Chemin de destination optionnel
             
         Returns:
-            Chemin de destination utilisé
+            Tuple (chemin de destination utilisé, liste des erreurs)
+            Chaque erreur est un dict avec 'file' et 'error'
         """
         dest_path = self._get_destination_path(destination)
+        errors = []
+        successful = []
         
         if not self._filesystem.exists(dest_path):
             self._filesystem.create_directory(dest_path)
         
-        for entry in self._selection:
+        for entry in list(self._selection):
             source = self._filesystem.join_path(self._current_directory, entry)
             target = self._filesystem.join_path(dest_path, entry)
-            self._file_operations.move(source, target)
+            
+            try:
+                self._file_operations.move(source, target)
+                successful.append(entry)
+            except Exception as e:
+                errors.append({"file": entry, "error": str(e)})
         
-        # Retirer les entrées déplacées de la liste et de la sélection
-        for entry in list(self._selection):
+        # Retirer les entrées déplacées avec succès de la liste et de la sélection
+        for entry in successful:
             self._entries.remove(entry)
-        self._selection.clear()
+            self._selection.discard(entry)
         
-        return dest_path
+        return dest_path, errors
     
-    def delete_selection(self) -> None:
-        """Supprime les entrées sélectionnées."""
-        for entry in self._selection:
+    def delete_selection(self) -> List[Dict[str, Any]]:
+        """
+        Supprime les entrées sélectionnées.
+        
+        Returns:
+            Liste des erreurs. Chaque erreur est un dict avec 'file' et 'error'
+        """
+        errors = []
+        successful = []
+        
+        for entry in list(self._selection):
             path = self._filesystem.join_path(self._current_directory, entry)
             
-            if self._filesystem.is_directory(path):
-                self._file_operations.delete_directory(path)
-            else:
-                self._file_operations.delete_file(path)
+            try:
+                if self._filesystem.is_directory(path):
+                    self._file_operations.delete_directory(path)
+                else:
+                    self._file_operations.delete_file(path)
+                successful.append(entry)
+            except Exception as e:
+                errors.append({"file": entry, "error": str(e)})
         
-        # Retirer les entrées supprimées de la liste
-        for entry in list(self._selection):
+        # Retirer les entrées supprimées avec succès de la liste et de la sélection
+        for entry in successful:
             self._entries.remove(entry)
-        self._selection.clear()
+            self._selection.discard(entry)
+        
+        return errors
