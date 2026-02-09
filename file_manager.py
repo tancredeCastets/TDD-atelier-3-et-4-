@@ -4,7 +4,7 @@ Module de sélection et manipulation de fichiers.
 import os
 import shutil
 import random
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple, Dict, Any
 
 
 class DefaultFilesystem:

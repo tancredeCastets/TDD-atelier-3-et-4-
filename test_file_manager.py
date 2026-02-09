@@ -64,25 +64,42 @@ class MockFileOperations:
         self.moved_items = []
         self.deleted_files = []
         self.deleted_directories = []
+        self._errors = {}
+    
+    def raise_error_for(self, operation: str, path: str, error: Exception):
+        """Configure une erreur à lever pour une opération sur un chemin."""
+        key = (operation, path)
+        self._errors[key] = error
+    
+    def _check_error(self, operation: str, path: str):
+        """Vérifie et lève une erreur si configurée."""
+        key = (operation, path)
+        if key in self._errors:
+            raise self._errors[key]
     
     def copy_file(self, source: str, destination: str) -> None:
         """Simule la copie d'un fichier."""
+        self._check_error("copy_file", source)
         self.copied_files.append((source, destination))
     
     def copy_directory(self, source: str, destination: str) -> None:
         """Simule la copie d'un répertoire."""
+        self._check_error("copy_directory", source)
         self.copied_directories.append((source, destination))
     
     def move(self, source: str, destination: str) -> None:
         """Simule le déplacement d'un fichier ou répertoire."""
+        self._check_error("move", source)
         self.moved_items.append((source, destination))
     
     def delete_file(self, path: str) -> None:
         """Simule la suppression d'un fichier."""
+        self._check_error("delete_file", path)
         self.deleted_files.append(path)
     
     def delete_directory(self, path: str) -> None:
         """Simule la suppression d'un répertoire."""
+        self._check_error("delete_directory", path)
         self.deleted_directories.append(path)
 
 
@@ -677,6 +694,131 @@ class TestFileManagerRandomRetry(unittest.TestCase):
         result = self.manager.copy_selection()
         
         self.assertEqual(result, "/source/nom9_test9_3")
+
+
+class TestFileManagerErrorHandling(unittest.TestCase):
+    """Tests pour la gestion avancée des erreurs."""
+    
+    def setUp(self):
+        self.mock_fs = MockFilesystem()
+        self.mock_ops = MockFileOperations()
+        self.mock_random = MockRandomGenerator()
+        self.manager = FileManager(
+            filesystem=self.mock_fs,
+            file_operations=self.mock_ops,
+            random_generator=self.mock_random
+        )
+    
+    def test_copy_returns_errors_list(self):
+        """Test: la copie retourne une liste d'erreurs."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        dest, errors = self.manager.copy_selection("/dest")
+        
+        self.assertIsInstance(errors, list)
+    
+    def test_copy_error_keeps_file_selected(self):
+        """Test: un fichier en erreur reste sélectionné."""
+        self.mock_fs.setup_directory("/source", ["file1.txt", "file2.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.mock_fs.add_file("/source/file2.txt")
+        self.mock_ops.raise_error_for("copy_file", "/source/file1.txt", Exception("Erreur de copie"))
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        self.manager.select("file2.txt")
+        
+        dest, errors = self.manager.copy_selection("/dest")
+        
+        self.assertIn("file1.txt", self.manager.get_selection())
+        self.assertNotIn("file2.txt", self.manager.get_selection())
+    
+    def test_copy_error_contains_file_and_message(self):
+        """Test: l'erreur contient le nom du fichier et le message."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.mock_ops.raise_error_for("copy_file", "/source/file1.txt", Exception("Permission refusée"))
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        dest, errors = self.manager.copy_selection("/dest")
+        
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["file"], "file1.txt")
+        self.assertEqual(errors[0]["error"], "Permission refusée")
+    
+    def test_move_returns_errors_list(self):
+        """Test: le déplacement retourne une liste d'erreurs."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        dest, errors = self.manager.move_selection("/dest")
+        
+        self.assertIsInstance(errors, list)
+    
+    def test_move_error_keeps_file_selected_and_in_entries(self):
+        """Test: un fichier en erreur reste sélectionné et dans les entrées."""
+        self.mock_fs.setup_directory("/source", ["file1.txt", "file2.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.mock_fs.add_file("/source/file2.txt")
+        self.mock_ops.raise_error_for("move", "/source/file1.txt", Exception("Erreur de déplacement"))
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        self.manager.select("file2.txt")
+        
+        dest, errors = self.manager.move_selection("/dest")
+        
+        self.assertIn("file1.txt", self.manager.get_selection())
+        self.assertIn("file1.txt", self.manager.get_entries())
+        self.assertNotIn("file2.txt", self.manager.get_selection())
+        self.assertNotIn("file2.txt", self.manager.get_entries())
+    
+    def test_delete_returns_errors_list(self):
+        """Test: la suppression retourne une liste d'erreurs."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        errors = self.manager.delete_selection()
+        
+        self.assertIsInstance(errors, list)
+    
+    def test_delete_error_keeps_file_selected_and_in_entries(self):
+        """Test: un fichier en erreur de suppression reste sélectionné et dans les entrées."""
+        self.mock_fs.setup_directory("/source", ["file1.txt", "file2.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.mock_fs.add_file("/source/file2.txt")
+        self.mock_ops.raise_error_for("delete_file", "/source/file1.txt", Exception("Fichier verrouillé"))
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        self.manager.select("file2.txt")
+        
+        errors = self.manager.delete_selection()
+        
+        self.assertIn("file1.txt", self.manager.get_selection())
+        self.assertIn("file1.txt", self.manager.get_entries())
+        self.assertNotIn("file2.txt", self.manager.get_selection())
+        self.assertNotIn("file2.txt", self.manager.get_entries())
+    
+    def test_multiple_errors_returns_all(self):
+        """Test: plusieurs erreurs sont toutes retournées."""
+        self.mock_fs.setup_directory("/source", ["file1.txt", "file2.txt", "file3.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        self.mock_fs.add_file("/source/file2.txt")
+        self.mock_fs.add_file("/source/file3.txt")
+        self.mock_ops.raise_error_for("copy_file", "/source/file1.txt", Exception("Erreur 1"))
+        self.mock_ops.raise_error_for("copy_file", "/source/file2.txt", Exception("Erreur 2"))
+        self.manager.list_entries("/source")
+        self.manager.select_all()
+        
+        dest, errors = self.manager.copy_selection("/dest")
+        
+        self.assertEqual(len(errors), 2)
 
 
 if __name__ == "__main__":
