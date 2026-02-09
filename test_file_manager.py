@@ -589,5 +589,95 @@ class TestFileManagerRandomNameGeneration(unittest.TestCase):
             self.assertTrue(pattern.match(adj), f"'{adj}' contient des caractères spéciaux")
 
 
+class TestFileManagerRandomRetry(unittest.TestCase):
+    """Tests pour la répétition du tirage aléatoire si le répertoire existe."""
+    
+    def setUp(self):
+        self.mock_fs = MockFilesystem()
+        self.mock_ops = MockFileOperations()
+        self.mock_random = MockRandomGenerator()
+        self.manager = FileManager(
+            filesystem=self.mock_fs,
+            file_operations=self.mock_ops,
+            random_generator=self.mock_random
+        )
+    
+    def test_retry_if_directory_exists(self):
+        """Test: retente le tirage si le répertoire existe déjà."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        # Le premier nom généré existe déjà
+        self.mock_fs.add_directory("/source/beau_soleil")
+        # Configurer les tirages: premier échoue, deuxième réussit
+        self.mock_random.set_values(["beau", "soleil", "grand", "montagne"])
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        result = self.manager.copy_selection()
+        
+        self.assertEqual(result, "/source/grand_montagne")
+    
+    def test_retry_up_to_10_times(self):
+        """Test: retente jusqu'à 10 fois maximum."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        # Les 10 premiers noms existent
+        for i in range(10):
+            self.mock_fs.add_directory(f"/source/nom{i}_test{i}")
+        # Configurer 10 tirages qui échouent puis 1 qui réussit
+        values = []
+        for i in range(10):
+            values.extend([f"nom{i}", f"test{i}"])
+        values.extend(["libre", "chemin"])
+        self.mock_random.set_values(values)
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        result = self.manager.copy_selection()
+        
+        self.assertEqual(result, "/source/libre_chemin")
+    
+    def test_add_number_after_10_retries(self):
+        """Test: ajoute un numéro après 10 tentatives échouées."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        # Les 10 premiers noms + le 11ème existent tous
+        for i in range(11):
+            self.mock_fs.add_directory(f"/source/nom{i}_test{i}")
+        # Configurer 11 tirages qui échouent tous
+        values = []
+        for i in range(11):
+            values.extend([f"nom{i}", f"test{i}"])
+        self.mock_random.set_values(values)
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        result = self.manager.copy_selection()
+        
+        # Le dernier nom tiré (nom10_test10) doit être numéroté
+        self.assertEqual(result, "/source/nom10_test10_1")
+    
+    def test_increment_number_until_unique(self):
+        """Test: incrémente le numéro jusqu'à trouver un nom unique."""
+        self.mock_fs.setup_directory("/source", ["file1.txt"])
+        self.mock_fs.add_file("/source/file1.txt")
+        # Les 10 premiers noms existent + versions numérotées
+        for i in range(11):
+            self.mock_fs.add_directory(f"/source/nom{i}_test{i}")
+        self.mock_fs.add_directory("/source/nom10_test10_1")
+        self.mock_fs.add_directory("/source/nom10_test10_2")
+        # Configurer 11 tirages
+        values = []
+        for i in range(11):
+            values.extend([f"nom{i}", f"test{i}"])
+        self.mock_random.set_values(values)
+        self.manager.list_entries("/source")
+        self.manager.select("file1.txt")
+        
+        result = self.manager.copy_selection()
+        
+        self.assertEqual(result, "/source/nom10_test10_3")
+
+
 if __name__ == "__main__":
     unittest.main()

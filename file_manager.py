@@ -165,6 +165,31 @@ class FileManager:
         noun = self._random.choice(self.NOUNS)
         return f"{adjective}_{noun}"
     
+    def _generate_unique_name(self) -> str:
+        """
+        Génère un nom de répertoire unique.
+        Retente jusqu'à 10 fois si le nom existe déjà.
+        Après 10 tentatives, ajoute un numéro au dernier nom tiré.
+        """
+        max_retries = 10
+        last_name = None
+        
+        for _ in range(max_retries):
+            name = self._generate_random_name()
+            last_name = name
+            path = self._filesystem.join_path(self._current_directory, name)
+            if not self._filesystem.exists(path):
+                return name
+        
+        # Après 10 tentatives, numéroter le dernier nom
+        counter = 1
+        while True:
+            numbered_name = f"{last_name}_{counter}"
+            path = self._filesystem.join_path(self._current_directory, numbered_name)
+            if not self._filesystem.exists(path):
+                return numbered_name
+            counter += 1
+    
     def _get_destination_path(self, destination: Optional[str] = None) -> str:
         """
         Détermine le chemin de destination.
@@ -178,7 +203,7 @@ class FileManager:
         if destination:
             return destination
         
-        random_name = self._generate_random_name()
+        random_name = self._generate_unique_name()
         return self._filesystem.join_path(self._current_directory, random_name)
     
     def copy_selection(self, destination: Optional[str] = None) -> str:
