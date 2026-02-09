@@ -7,6 +7,62 @@ import random
 from typing import List, Optional, Set
 
 
+class DefaultFilesystem:
+    """Implémentation par défaut pour l'exploration du système de fichiers."""
+    
+    def list_directory(self, path: str) -> List[str]:
+        """Liste les entrées d'un répertoire."""
+        return os.listdir(path)
+    
+    def exists(self, path: str) -> bool:
+        """Vérifie si un chemin existe."""
+        return os.path.exists(path)
+    
+    def is_directory(self, path: str) -> bool:
+        """Vérifie si un chemin est un répertoire."""
+        return os.path.isdir(path)
+    
+    def join_path(self, *paths) -> str:
+        """Joint des chemins."""
+        return os.path.join(*paths)
+    
+    def create_directory(self, path: str) -> None:
+        """Crée un répertoire."""
+        os.makedirs(path, exist_ok=True)
+
+
+class DefaultFileOperations:
+    """Implémentation par défaut pour les opérations sur fichiers."""
+    
+    def copy_file(self, source: str, destination: str) -> None:
+        """Copie un fichier."""
+        shutil.copy2(source, destination)
+    
+    def copy_directory(self, source: str, destination: str) -> None:
+        """Copie un répertoire."""
+        shutil.copytree(source, destination)
+    
+    def move(self, source: str, destination: str) -> None:
+        """Déplace un fichier ou répertoire."""
+        shutil.move(source, destination)
+    
+    def delete_file(self, path: str) -> None:
+        """Supprime un fichier."""
+        os.remove(path)
+    
+    def delete_directory(self, path: str) -> None:
+        """Supprime un répertoire."""
+        shutil.rmtree(path)
+
+
+class DefaultRandomGenerator:
+    """Implémentation par défaut pour le tirage aléatoire."""
+    
+    def choice(self, sequence):
+        """Choisit un élément aléatoire dans une séquence."""
+        return random.choice(sequence)
+
+
 class FileManager:
     """Classe pour énumérer, sélectionner et manipuler des fichiers et répertoires."""
     
@@ -25,8 +81,19 @@ class FileManager:
         "joyeux", "paisible", "mysterieux", "magique", "eternel"
     ]
     
-    def __init__(self):
-        """Initialise le FileManager."""
+    def __init__(self, filesystem=None, file_operations=None, random_generator=None):
+        """
+        Initialise le FileManager avec des dépendances injectables.
+        
+        Args:
+            filesystem: Interface pour l'exploration du système de fichiers (simulation possible)
+            file_operations: Interface pour les opérations sur fichiers (simulation possible)
+            random_generator: Interface pour le tirage aléatoire (simulation possible)
+        """
+        self._filesystem = filesystem or DefaultFilesystem()
+        self._file_operations = file_operations or DefaultFileOperations()
+        self._random = random_generator or DefaultRandomGenerator()
+        
         self._current_directory: Optional[str] = None
         self._entries: List[str] = []
         self._selection: Set[str] = set()
@@ -42,7 +109,7 @@ class FileManager:
             Liste des noms d'entrées (fichiers et répertoires)
         """
         self._current_directory = directory
-        self._entries = os.listdir(directory)
+        self._entries = self._filesystem.list_directory(directory)
         self._selection.clear()
         return self._entries.copy()
     
@@ -94,8 +161,8 @@ class FileManager:
     
     def _generate_random_name(self) -> str:
         """Génère un nom aléatoire en combinant un adjectif et un nom."""
-        adjective = random.choice(self.ADJECTIVES)
-        noun = random.choice(self.NOUNS)
+        adjective = self._random.choice(self.ADJECTIVES)
+        noun = self._random.choice(self.NOUNS)
         return f"{adjective}_{noun}"
     
     def _get_destination_path(self, destination: Optional[str] = None) -> str:
@@ -112,7 +179,7 @@ class FileManager:
             return destination
         
         random_name = self._generate_random_name()
-        return os.path.join(self._current_directory, random_name)
+        return self._filesystem.join_path(self._current_directory, random_name)
     
     def copy_selection(self, destination: Optional[str] = None) -> str:
         """
@@ -126,17 +193,17 @@ class FileManager:
         """
         dest_path = self._get_destination_path(destination)
         
-        if not os.path.exists(dest_path):
-            os.makedirs(dest_path, exist_ok=True)
+        if not self._filesystem.exists(dest_path):
+            self._filesystem.create_directory(dest_path)
         
         for entry in self._selection:
-            source = os.path.join(self._current_directory, entry)
-            target = os.path.join(dest_path, entry)
+            source = self._filesystem.join_path(self._current_directory, entry)
+            target = self._filesystem.join_path(dest_path, entry)
             
-            if os.path.isdir(source):
-                shutil.copytree(source, target)
+            if self._filesystem.is_directory(source):
+                self._file_operations.copy_directory(source, target)
             else:
-                shutil.copy2(source, target)
+                self._file_operations.copy_file(source, target)
         
         return dest_path
     
@@ -152,13 +219,13 @@ class FileManager:
         """
         dest_path = self._get_destination_path(destination)
         
-        if not os.path.exists(dest_path):
-            os.makedirs(dest_path, exist_ok=True)
+        if not self._filesystem.exists(dest_path):
+            self._filesystem.create_directory(dest_path)
         
         for entry in self._selection:
-            source = os.path.join(self._current_directory, entry)
-            target = os.path.join(dest_path, entry)
-            shutil.move(source, target)
+            source = self._filesystem.join_path(self._current_directory, entry)
+            target = self._filesystem.join_path(dest_path, entry)
+            self._file_operations.move(source, target)
         
         # Retirer les entrées déplacées de la liste et de la sélection
         for entry in list(self._selection):
@@ -170,12 +237,12 @@ class FileManager:
     def delete_selection(self) -> None:
         """Supprime les entrées sélectionnées."""
         for entry in self._selection:
-            path = os.path.join(self._current_directory, entry)
+            path = self._filesystem.join_path(self._current_directory, entry)
             
-            if os.path.isdir(path):
-                shutil.rmtree(path)
+            if self._filesystem.is_directory(path):
+                self._file_operations.delete_directory(path)
             else:
-                os.remove(path)
+                self._file_operations.delete_file(path)
         
         # Retirer les entrées supprimées de la liste
         for entry in list(self._selection):
