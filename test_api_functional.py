@@ -235,6 +235,147 @@ class TestFileManagerAPI:
         data = json.loads(response.data)
         entry_names = [e["name"] for e in data["entries"]]
         assert "sous_fichier.txt" in entry_names
+    
+    # ==================== ÉTAPE 3 - Opération de suppression ====================
+    
+    def test_delete_single_file(self):
+        """
+        ATDD Test: L'API doit permettre de supprimer un fichier sélectionné.
+        
+        Given: Un fichier sélectionné
+        When: Je fais une requête DELETE sur /api/files/delete
+        Then: Le fichier est supprimé
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        
+        response = self.client.delete("/api/files/delete")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert data["deleted_count"] == 1
+        
+        # Vérifier que le fichier n'existe plus
+        assert not os.path.exists(os.path.join(self.test_dir, "fichier1.txt"))
+    
+    def test_delete_multiple_files(self):
+        """
+        ATDD Test: L'API doit permettre de supprimer plusieurs fichiers sélectionnés.
+        
+        Given: Plusieurs fichiers sélectionnés
+        When: Je fais une requête DELETE sur /api/files/delete
+        Then: Tous les fichiers sont supprimés
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier2.txt"})
+        
+        response = self.client.delete("/api/files/delete")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["deleted_count"] == 2
+        
+        # Vérifier que les fichiers n'existent plus
+        assert not os.path.exists(os.path.join(self.test_dir, "fichier1.txt"))
+        assert not os.path.exists(os.path.join(self.test_dir, "fichier2.txt"))
+    
+    def test_delete_directory(self):
+        """
+        ATDD Test: L'API doit permettre de supprimer un répertoire sélectionné.
+        
+        Given: Un répertoire sélectionné
+        When: Je fais une requête DELETE sur /api/files/delete
+        Then: Le répertoire est supprimé
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "dossier1"})
+        
+        response = self.client.delete("/api/files/delete")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["deleted_count"] == 1
+        
+        # Vérifier que le répertoire n'existe plus
+        assert not os.path.exists(os.path.join(self.test_dir, "dossier1"))
+    
+    def test_delete_nothing_selected(self):
+        """
+        ATDD Test: La suppression sans sélection retourne un message approprié.
+        
+        Given: Aucun fichier sélectionné
+        When: Je fais une requête DELETE sur /api/files/delete
+        Then: Je reçois un message indiquant qu'il n'y a rien à supprimer
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        response = self.client.delete("/api/files/delete")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["deleted_count"] == 0
+    
+    def test_delete_clears_selection(self):
+        """
+        ATDD Test: Après suppression, les fichiers supprimés sont retirés de la sélection.
+        
+        Given: Des fichiers sélectionnés et supprimés
+        When: Je consulte la sélection
+        Then: La sélection ne contient plus les fichiers supprimés
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        
+        self.client.delete("/api/files/delete")
+        
+        response = self.client.get("/api/selection")
+        data = json.loads(response.data)
+        
+        assert "fichier1.txt" not in data["selection"]
+    
+    def test_delete_with_partial_error(self):
+        """
+        ATDD Test: Si certains fichiers ne peuvent pas être supprimés, on reçoit les erreurs.
+        
+        Given: Des fichiers sélectionnés dont certains ne peuvent pas être supprimés
+        When: Je fais une requête DELETE
+        Then: Je reçois la liste des erreurs
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        # Sélectionner un fichier qui existe
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        
+        # Supprimer le fichier manuellement pour simuler une erreur
+        os.remove(os.path.join(self.test_dir, "fichier1.txt"))
+        
+        response = self.client.delete("/api/files/delete")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        # On s'attend à des erreurs car le fichier n'existe plus
+        assert "errors" in data
+    
+    def test_delete_updates_file_list(self):
+        """
+        ATDD Test: Après suppression, la liste des fichiers est mise à jour.
+        
+        Given: Un fichier supprimé
+        When: Je liste à nouveau les fichiers
+        Then: Le fichier n'apparaît plus dans la liste
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        self.client.delete("/api/files/delete")
+        
+        # Re-lister les fichiers
+        response = self.client.get(f"/api/files?path={self.test_dir}")
+        data = json.loads(response.data)
+        
+        entry_names = [e["name"] for e in data["entries"]]
+        assert "fichier1.txt" not in entry_names
 
 
 if __name__ == "__main__":
