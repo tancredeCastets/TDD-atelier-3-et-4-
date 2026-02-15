@@ -127,6 +127,32 @@ def create_app():
         else:
             return jsonify({"error": f"Action inconnue: {action}"}), 400
     
+    @app.route("/api/files/delete", methods=["DELETE"])
+    def delete_files():
+        """
+        Supprime les fichiers et répertoires sélectionnés.
+        
+        Returns:
+            JSON avec le résultat de la suppression
+        """
+        selection = file_manager.get_selection()
+        
+        if not selection:
+            return jsonify({
+                "success": True,
+                "deleted_count": 0,
+                "message": "Aucun fichier sélectionné"
+            })
+        
+        errors = file_manager.delete_selection()
+        deleted_count = len(selection) - len(errors)
+        
+        return jsonify({
+            "success": len(errors) == 0,
+            "deleted_count": deleted_count,
+            "errors": errors
+        })
+    
     return app
 
 
