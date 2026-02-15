@@ -100,6 +100,141 @@ class TestFileManagerAPI:
         assert response.status_code == 404
         data = json.loads(response.data)
         assert "error" in data
+    
+    # ==================== ÉTAPE 2 - Sélection de fichiers ====================
+    
+    def test_select_file(self):
+        """
+        ATDD Test: L'API doit permettre de sélectionner un fichier.
+        
+        Given: Un répertoire exploré avec des fichiers
+        When: Je fais une requête POST sur /api/selection avec un fichier
+        Then: Le fichier est ajouté à la sélection
+        """
+        # D'abord explorer le répertoire
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        # Sélectionner un fichier
+        response = self.client.post("/api/selection", json={
+            "action": "select",
+            "entry": "fichier1.txt"
+        })
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "fichier1.txt" in data["selection"]
+    
+    def test_select_multiple_files(self):
+        """
+        ATDD Test: L'API doit permettre de sélectionner plusieurs fichiers.
+        
+        Given: Un répertoire exploré
+        When: Je sélectionne plusieurs fichiers
+        Then: Tous les fichiers sont dans la sélection
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier2.txt"})
+        
+        response = self.client.get("/api/selection")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "fichier1.txt" in data["selection"]
+        assert "fichier2.txt" in data["selection"]
+    
+    def test_deselect_file(self):
+        """
+        ATDD Test: L'API doit permettre de désélectionner un fichier.
+        
+        Given: Un fichier sélectionné
+        When: Je fais une requête POST pour désélectionner
+        Then: Le fichier n'est plus dans la sélection
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select", "entry": "fichier1.txt"})
+        
+        response = self.client.post("/api/selection", json={
+            "action": "deselect",
+            "entry": "fichier1.txt"
+        })
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "fichier1.txt" not in data["selection"]
+    
+    def test_select_all(self):
+        """
+        ATDD Test: L'API doit permettre de sélectionner toutes les entrées.
+        
+        Given: Un répertoire exploré
+        When: Je fais une requête POST pour tout sélectionner
+        Then: Toutes les entrées sont sélectionnées
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        response = self.client.post("/api/selection", json={"action": "select_all"})
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["selection"]) == 5
+    
+    def test_deselect_all(self):
+        """
+        ATDD Test: L'API doit permettre de tout désélectionner.
+        
+        Given: Des fichiers sélectionnés
+        When: Je fais une requête POST pour tout désélectionner
+        Then: La sélection est vide
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        self.client.post("/api/selection", json={"action": "select_all"})
+        
+        response = self.client.post("/api/selection", json={"action": "deselect_all"})
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["selection"]) == 0
+    
+    def test_select_nonexistent_file_fails(self):
+        """
+        ATDD Test: La sélection d'un fichier inexistant doit échouer.
+        
+        Given: Un répertoire exploré
+        When: J'essaie de sélectionner un fichier qui n'existe pas
+        Then: Je reçois une erreur
+        """
+        self.client.get(f"/api/files?path={self.test_dir}")
+        
+        response = self.client.post("/api/selection", json={
+            "action": "select",
+            "entry": "fichier_inexistant.txt"
+        })
+        
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "error" in data
+    
+    def test_navigate_to_subdirectory(self):
+        """
+        ATDD Test: L'API doit permettre de naviguer dans un sous-répertoire.
+        
+        Given: Un répertoire avec des sous-répertoires
+        When: Je liste les fichiers du sous-répertoire
+        Then: Je vois le contenu du sous-répertoire
+        """
+        # Créer un fichier dans le sous-répertoire
+        subdir_path = os.path.join(self.test_dir, "dossier1")
+        open(os.path.join(subdir_path, "sous_fichier.txt"), "w").close()
+        
+        response = self.client.get(f"/api/files?path={subdir_path}")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        entry_names = [e["name"] for e in data["entries"]]
+        assert "sous_fichier.txt" in entry_names
 
 
 if __name__ == "__main__":
